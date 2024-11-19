@@ -455,7 +455,7 @@ class IntegratedGradientLatentAttributorZennit(ZennitLatentRelevanceAttributor):
                         self.latent_relevances[name] /= self.num_iter
 
 
-class ComponentAttibution:
+class ComponentAttribution:
     def __init__(self, attribution_type, model_type, target_layer_type):
         self.model_type = model_type
         self.attribution_type = attribution_type
@@ -508,7 +508,7 @@ class ComponentAttibution:
         # Currect layer names are obtained
         # after the composites + canonizers
         # are registered
-        self.layer_names = ComponentAttibution.get_layer_names(
+        self.layer_names = ComponentAttribution.get_layer_names(
             model, self.target_layer_type
         )
 

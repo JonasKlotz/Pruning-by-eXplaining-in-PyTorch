@@ -43,9 +43,9 @@ class ModelLoader:
         return model, architecture
 
     @staticmethod
-    def get_basic_model(architecture, checkpoint_path, device):
+    def get_basic_model(architecture, checkpoint_path, device, num_classes=1000):
         print(f"Arch:{architecture}")
-        model, _ = ModelLoader.load_model(architecture, num_classes=1000)
+        model, _ = ModelLoader.load_model(architecture, num_classes=num_classes)
         if checkpoint_path not in [None, "None"]:
             loaded_state_dictionary = ModelLoader.load_state_dictionary_from_checkpoint(
                 checkpoint_path

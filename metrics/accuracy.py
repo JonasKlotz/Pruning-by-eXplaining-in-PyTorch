@@ -19,6 +19,8 @@ def compute_accuracy(model, dataloader, device):
 
     correct_top1 = 0
     total_samples = 0
+    max_calc = 10
+    i = 0
     with torch.no_grad():
         for images, labels in dataloader:
             images = images.to(device)
@@ -31,6 +33,11 @@ def compute_accuracy(model, dataloader, device):
             correct_top1 += predicted.eq(labels.view(-1, 1)).sum().item()
 
             total_samples += labels.size(0)
+
+            i += 1
+            if i == max_calc:
+                print(f"Warning we only calculate the accuracy for {max_calc} batches")
+                break
 
     accuracy_top1 = correct_top1 / total_samples
     del (

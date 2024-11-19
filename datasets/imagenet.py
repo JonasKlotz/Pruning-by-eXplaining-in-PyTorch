@@ -241,7 +241,7 @@ def get_sample_indices_for_class(
             torch.tensor(dataset.targets).to(device) == torch.tensor(c).to(device)
         )[0].to(device)
         if num_samples_per_class != "all":
-            if num_samples_per_class <= dataset.targets.count(c):
+            if num_samples_per_class <= dataset.targets.count(c): # if num_samples_per_class <= (dataset.targets == c).sum().item()
                 # Choose a random subset of the indices
                 random_indices_for_class = torch.randperm(len(class_indices))[
                     :num_samples_per_class

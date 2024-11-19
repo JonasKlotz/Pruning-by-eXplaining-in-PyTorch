@@ -756,104 +756,104 @@ class InputRefXGMultiplyAlphaBetaModule(nn.Module):
         )
 
 
-class InputRefXGradientMultiplyGammaModuleOLD(nn.Module):
+# class InputRefXGradientMultiplyGammaModuleOLD(nn.Module):
+#
+#     def __init__(self, module, root_fn, transpose, gamma=1) -> None:
+#         super().__init__()
+#         self.module = module
+#         self.root_fn = root_fn
+#         self.transpose = transpose
+#         self.gamma = gamma
+#
+#         self.mod_input = [
+#             lambda input: input,
+#             lambda input: input.clamp(min=0),
+#             lambda input: input.clamp(max=0),
+#         ]
+#         self.mod_jac = [
+#             lambda input: input,
+#             lambda input: input.clamp(min=0),
+#             lambda input: input.clamp(max=0),
+#         ]
+#
+#         def mod_output(outputs: list):
+#
+#             return outputs[0] + self.gamma * (outputs[1] + outputs[2])
+#
+#         self.mod_output = mod_output
+#         self.mod_relevance = mod_output
+#
+#         self.modifiers = (
+#             self.mod_input,
+#             self.mod_jac,
+#             self.mod_output,
+#             self.mod_relevance,
+#         )
+#
+#     def forward(self, *args, **kwargs):
+#
+#         return IRefXGMultiplyGenericRuleOLD.apply(
+#             self.module, self.modifiers, self.root_fn, self.transpose, kwargs, *args
+#         )
 
-    def __init__(self, module, root_fn, transpose, gamma=1) -> None:
-        super().__init__()
-        self.module = module
-        self.root_fn = root_fn
-        self.transpose = transpose
-        self.gamma = gamma
 
-        self.mod_input = [
-            lambda input: input,
-            lambda input: input.clamp(min=0),
-            lambda input: input.clamp(max=0),
-        ]
-        self.mod_jac = [
-            lambda input: input,
-            lambda input: input.clamp(min=0),
-            lambda input: input.clamp(max=0),
-        ]
-
-        def mod_output(outputs: list):
-
-            return outputs[0] + self.gamma * (outputs[1] + outputs[2])
-
-        self.mod_output = mod_output
-        self.mod_relevance = mod_output
-
-        self.modifiers = (
-            self.mod_input,
-            self.mod_jac,
-            self.mod_output,
-            self.mod_relevance,
-        )
-
-    def forward(self, *args, **kwargs):
-
-        return IRefXGMultiplyGenericRuleOLD.apply(
-            self.module, self.modifiers, self.root_fn, self.transpose, kwargs, *args
-        )
-
-
-class InputRefXGradientMultiplyGammaModuleProOLD(nn.Module):
-
-    def __init__(self, module, root_fn, transpose, gamma=1) -> None:
-        super().__init__()
-        self.module = module
-        self.root_fn = root_fn
-        self.transpose = transpose
-        self.gamma = gamma
-
-        self.mod_input = [
-            lambda input: input,
-            lambda input: input.clamp(min=0),
-            lambda input: input.clamp(max=0),
-            lambda input: input.clamp(min=0),
-            lambda input: input.clamp(max=0),
-        ]
-        self.mod_jac = [
-            lambda input: input,
-            lambda input: input.clamp(min=0),
-            lambda input: input.clamp(max=0),
-            lambda input: input.clamp(max=0),
-            lambda input: input.clamp(min=0),
-        ]
-
-        def mod_output(outputs: list):
-
-            gamma_term = torch.where(
-                outputs[0] >= 0, outputs[1] + outputs[2], outputs[3] + outputs[4]
-            )
-            return outputs[0] + self.gamma * gamma_term
-
-        self.mod_output = mod_output
-
-        def mod_mask(grad_output, output):
-
-            return [
-                grad_output,
-                grad_output / stabilize(output.clamp(min=0)),
-                grad_output / stabilize(output.clamp(min=0)),
-                grad_output / stabilize(output.clamp(max=0)),
-                grad_output / stabilize(output.clamp(max=0)),
-            ]
-
-        self.mod_relevance = mod_output
-
-        self.modifiers = (
-            self.mod_input,
-            self.mod_jac,
-            self.mod_output,
-            self.mod_relevance,
-        )
-
-    def forward(self, *args, **kwargs):
-
-        return IRefXGMultiplyGenericRuleOLD.apply(
-            self.module, self.modifiers, self.root_fn, self.transpose, kwargs, *args
-        )
+# class InputRefXGradientMultiplyGammaModuleProOLD(nn.Module):
+#
+#     def __init__(self, module, root_fn, transpose, gamma=1) -> None:
+#         super().__init__()
+#         self.module = module
+#         self.root_fn = root_fn
+#         self.transpose = transpose
+#         self.gamma = gamma
+#
+#         self.mod_input = [
+#             lambda input: input,
+#             lambda input: input.clamp(min=0),
+#             lambda input: input.clamp(max=0),
+#             lambda input: input.clamp(min=0),
+#             lambda input: input.clamp(max=0),
+#         ]
+#         self.mod_jac = [
+#             lambda input: input,
+#             lambda input: input.clamp(min=0),
+#             lambda input: input.clamp(max=0),
+#             lambda input: input.clamp(max=0),
+#             lambda input: input.clamp(min=0),
+#         ]
+#
+#         def mod_output(outputs: list):
+#
+#             gamma_term = torch.where(
+#                 outputs[0] >= 0, outputs[1] + outputs[2], outputs[3] + outputs[4]
+#             )
+#             return outputs[0] + self.gamma * gamma_term
+#
+#         self.mod_output = mod_output
+#
+#         def mod_mask(grad_output, output):
+#
+#             return [
+#                 grad_output,
+#                 grad_output / stabilize(output.clamp(min=0)),
+#                 grad_output / stabilize(output.clamp(min=0)),
+#                 grad_output / stabilize(output.clamp(max=0)),
+#                 grad_output / stabilize(output.clamp(max=0)),
+#             ]
+#
+#         self.mod_relevance = mod_output
+#
+#         self.modifiers = (
+#             self.mod_input,
+#             self.mod_jac,
+#             self.mod_output,
+#             self.mod_relevance,
+#         )
+#
+#     def forward(self, *args, **kwargs):
+#
+#         return IRefXGMultiplyGenericRuleOLD.apply(
+#             self.module, self.modifiers, self.root_fn, self.transpose, kwargs, *args
+#         )
 
 
 class InputRefXGradientClipModule(nn.Module):

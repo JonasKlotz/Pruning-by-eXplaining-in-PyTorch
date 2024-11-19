@@ -4,11 +4,12 @@ import torch
 import tqdm.auto
 import numpy as np
 import wandb
+from torchvision.datasets import MNIST, STL10, CIFAR10
+from torchvision import transforms
 
 from models import ModelLoader
 from metrics import compute_accuracy
-from datasets import ImageNet, ImageNetSubset, get_sample_indices_for_class
-
+from datasets import ImageNetSubset, ImageNetSubset, get_sample_indices_for_class
 
 from utils import (
     initialize_random_seed,
@@ -23,7 +24,7 @@ from pxp import (
 
 
 from pxp import GlobalPruningOperations
-from pxp import ComponentAttibution
+from pxp import ComponentAttribution
 
 
 # generate some input reciever using click
@@ -46,7 +47,10 @@ def start(
     configs["checkpoint_path"] = checkpoint_path
     configs["dataset_path"] = dataset_path
 
+
+    num_workers = 0
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     initialize_random_seed(configs["random_seed"])
     results_file_name = (
         f"accuracy_{configs['model_architecture']}_{configs['mode']}_{configs['subsequent_layer_pruning']}_sort{configs['abs_sort']}_leastvalue{configs['least_relevant_first']}_{configs['random_seed']}"
@@ -72,15 +76,48 @@ def start(
     """
     Load the dataset
     """
-    imagenet = ImageNet(
-        configs["dataset_path"], random_seed=configs["random_seed"], num_workers=8
-    )
-    train_set = imagenet.get_train_set()
-    val_set = imagenet.get_valid_set()
+    # imagenet = ImageNet(
+    #     configs["dataset_path"], random_seed=configs["random_seed"], num_workers=0
+    # )
+    # train_set = imagenet.get_train_set()
+    # val_set = imagenet.get_valid_set()
+    # list_random_classes = train_set.random_classes(
+    #     configs["domain_restriction_classes"]
+    # )
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    list_random_classes = train_set.random_classes(
-        configs["domain_restriction_classes"]
-    )
+    """
+    Load MNIST DATASET
+    """
+    # # Define transformations: Resize to 224x224, convert to tensor, and normalize
+    # transform = transforms.Compose([
+    #     transforms.Resize((224, 224)),  # Resize to 224x224
+    #     transforms.ToTensor(),  # Convert to tensor
+    #     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))  # Normalize RGB channels
+    # ])
+    #
+    # # Load the STL-10 dataset with transformations
+    # train_set = STL10(root="datasets/stl10", split="train", download=True, transform=transform)
+    # val_set = STL10(root="datasets/stl10", split="test", download=True, transform=transform)
+    # n_classes = 10
+    #
+    #
+
+    # Define transformations: Resize to 224x224, convert to tensor, and normalize
+    transform = transforms.Compose([
+        transforms.Resize((224, 224)),  # Resize to 224x224
+        transforms.ToTensor(),  # Convert to tensor
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))  # Normalize RGB channels
+    ])
+
+    # Load the CIFAR-10 dataset with transformations
+    train_set = CIFAR10(root="datasets/cifar10", train=True, download=True, transform=transform)
+    val_set = CIFAR10(root="datasets/cifar10", train=False, download=True, transform=transform)
+
+    n_classes = 10
+
+
+    list_random_classes =  torch.randperm(n_classes)[:configs["domain_restriction_classes"]]
     print(f"Random Classes chosen: {list_random_classes}")
     # For speeding up, we can use the pre-computed 10
     # randomly-chosen reference samples for attributing the model
@@ -93,7 +130,7 @@ def start(
             train_set,
             list_random_classes,
             configs["reference_samples_per_class"],
-            "cuda",
+            device=device,
         )
 
     validation_indices = get_sample_indices_for_class(
@@ -103,24 +140,28 @@ def start(
     custom_pruning_set = ImageNetSubset(train_set, pruning_indices)
     custom_validation_set = ImageNetSubset(val_set, validation_indices)
 
+    # get first batch
+    batch = next(iter(custom_pruning_set))
+    print(f"Batch shape: {batch[0].shape}")
+
     custom_pruning_dataloader = torch.utils.data.DataLoader(
         custom_pruning_set,
         batch_size=configs["pruning_dataloader_batchsize"],
         shuffle=True,
-        num_workers=8,
+        num_workers=num_workers,
     )
     custom_validation_dataloader = torch.utils.data.DataLoader(
         custom_validation_set,
         batch_size=configs["validation_dataloader_batchsize"],
         shuffle=True,
-        num_workers=8,
+        num_workers=num_workers,
     )
 
     del custom_pruning_set
     del custom_validation_set
     del validation_indices
     del pruning_indices
-    del imagenet
+    #del imagenet
     del train_set
     del val_set
 
@@ -132,12 +173,12 @@ def start(
             configs["model_architecture"], suggested_composite
         )
     else:
-        composite - get_cnn_composite(
+        composite = get_cnn_composite(
             configs["model_architecture"], suggested_composite
         )
 
     model = ModelLoader.get_basic_model(
-        configs["model_architecture"], configs["checkpoint_path"], device
+        configs["model_architecture"], configs["checkpoint_path"], device, num_classes=n_classes
     )
 
     layer_types = {
@@ -156,7 +197,7 @@ def start(
     """
     pruning_rates = configs["pruning_rates"]
 
-    component_attributor = ComponentAttibution(
+    component_attributor = ComponentAttribution(
         "Relevance",
         "ViT" if configs["model_architecture"] == "vit_b_16" else "CNN",
         layer_types[configs["pruning_layer_type"]],
@@ -169,6 +210,7 @@ def start(
         abs_flag=True,
         device=device,
     )
+    print(f"Components Relevances: {components_relevances}")
 
     acc_top1 = compute_accuracy(
         model,
@@ -203,6 +245,7 @@ def start(
                 least_relevant_first=configs["least_relevant_first"],
                 device=device,
             )
+            print(f"Global Pruning Mask: {global_pruning_mask}")
             # Our pruning gets applied by masking the
             # activation of layers via forward hooks.
             # Therefore hooks are returned for later
@@ -213,7 +256,7 @@ def start(
             )
 
         progress_bar.set_description(
-            f"Computing accuracy for model prunned with {int((pruning_rate)*100)}%"
+            f"Computing accuracy for model pruned with {int((pruning_rate)*100)}%"
         )
         acc_top1 = compute_accuracy(
             model,

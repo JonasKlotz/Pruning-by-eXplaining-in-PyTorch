@@ -7,7 +7,7 @@ from zennit.core import ParamMod
 import torch.nn.functional as F
 
 ####
-import pydevd
+# import pydevd
 
 # pydevd.settrace(suspend=False, trace_only_current_thread=True)
 ###
@@ -763,129 +763,129 @@ class LinearEpsilonStdMeanRule(Function):
         return (None, None, None) + (relevance.view(*input_shape),)
 
 
-class IRefXGMultiplyAdaptiveGammaVMAPRuleNOT_WORKING(Function):
-
-    @staticmethod
-    def forward(ctx, module, options, kwargs, *args):
-
-        ctx.saved_kwargs = kwargs
-        ctx.module = module
-        ctx.options = options
-
-        with torch.no_grad():  # seems not to be necessary
-            outputs = module(*args, **kwargs)
-            ctx.reference = options["ref_fn"](*args)
-
-            assert isinstance(ctx.reference, tuple)
-
-            ctx.save_for_backward(*args)
-
-        return outputs
-
-    @staticmethod
-    @torch.no_grad()  # necessary?
-    def compute_relevance(
-        jacobian, inputs, reference, grad_mask, modifier=lambda x: x, dim=1
-    ):
-
-        assert dim == 1 or dim == 0
-
-        inputs = inputs - reference
-
-        jacobian = jacobian * inputs.unsqueeze_(dim)
-        modifier(jacobian)  # in-place modification
-
-        if dim == 1:
-            jacobian.mul_(grad_mask[None, :])
-        else:
-            jacobian.mul_(grad_mask[:, None])
-
-        return jacobian.sum(dim)
-
-    @staticmethod
-    @torch.no_grad()  # necessary?
-    def compute_output(A, B, factor):
-
-        out = B * A.unsqueeze(1)
-        out_pos = torch.clamp(out, min=0.0)
-        out_neg = torch.clamp(out, max=0.0)
-
-        output = out.sum(0)
-        output_pos = out_pos.sum(0)
-        output_neg = out_neg.sum(0)
-        max_abs = abs(out).max(0)[0]
-
-        gamma = max_abs / factor - output
-        gamma = gamma / (
-            (output > 0) * output_pos
-            + (output < 0) * output_neg
-            + (output == 0) * 1e-10
-        )
-
-        return (
-            output + (output > 0) * output_pos * gamma + (output < 0) * output_neg,
-            gamma,
-        )
-
-    @staticmethod
-    @once_differentiable
-    def backward(ctx, *grad_outputs):
-
-        # -- initialize variables
-        A, B = ctx.saved_tensors[:2]
-        A_shape, B_shape = A.shape, B.shape
-        A_ref, B_ref = ctx.reference
-
-        if ctx.options["transpose"]:
-            B = B.transpose(-2, -1)
-            d_k = A.shape[-1]
-
-        # reshape head dimension into batch dimension for easier handling
-        A = A.reshape(-1, *A.shape[2:])
-        B = B.reshape(-1, *B.shape[2:])
-        grad_outputs = grad_outputs[0].reshape(-1, *grad_outputs[0].shape[2:])
-
-        # -- compute output
-        output, gamma = vmap(
-            vmap(
-                IRefXGMultiplyAdaptiveGammaVMAPRule.compute_output,
-                in_dims=(0, None, None),
-            ),
-            in_dims=(0, 0, None),
-            chunk_size=ctx.options["chunk_size"],
-        )(A, B, ctx.options["factor"])
-
-        if ctx.options["transpose"]:
-            output = output / math.sqrt(d_k)
-
-        # -- compute relevance
-        grad_outputs.div_(stabilize(output))
-
-        relevance_A = vmap(
-            vmap(IRefXGMultiplyVMAPRule.compute_relevance, in_dims=(None, 0, None, 0)),
-            in_dims=(0, 0, None, 0),
-            chunk_size=ctx.options["chunk_size"],
-        )(B, A, A_ref, grad_outputs, modifier=modifier, dim=1)
-
-        relevance_B = vmap(
-            vmap(
-                IRefXGMultiplyVMAPRule.compute_relevance,
-                in_dims=(None, 1, None, 1),
-                out_dims=1,
-            ),
-            in_dims=(0, 0, None, 0),
-            chunk_size=ctx.options["chunk_size"],
-        )(A, B, B_ref, grad_outputs, modifier=modifier, dim=0)
-
-        if ctx.options["transpose"]:
-            relevance_B = relevance_B.transpose(-2, -1)
-            relevance_B = relevance_B / math.sqrt(d_k)
-            relevance_A = relevance_A / math.sqrt(d_k)
-
-        return (None, None, None) + (
-            relevance_A.view(*A_shape),
-            relevance_B.view(*B_shape),
-        )
+# class IRefXGMultiplyAdaptiveGammaVMAPRuleNOT_WORKING(Function):
+#
+#     @staticmethod
+#     def forward(ctx, module, options, kwargs, *args):
+#
+#         ctx.saved_kwargs = kwargs
+#         ctx.module = module
+#         ctx.options = options
+#
+#         with torch.no_grad():  # seems not to be necessary
+#             outputs = module(*args, **kwargs)
+#             ctx.reference = options["ref_fn"](*args)
+#
+#             assert isinstance(ctx.reference, tuple)
+#
+#             ctx.save_for_backward(*args)
+#
+#         return outputs
+#
+#     @staticmethod
+#     @torch.no_grad()  # necessary?
+#     def compute_relevance(
+#         jacobian, inputs, reference, grad_mask, modifier=lambda x: x, dim=1
+#     ):
+#
+#         assert dim == 1 or dim == 0
+#
+#         inputs = inputs - reference
+#
+#         jacobian = jacobian * inputs.unsqueeze_(dim)
+#         modifier(jacobian)  # in-place modification
+#
+#         if dim == 1:
+#             jacobian.mul_(grad_mask[None, :])
+#         else:
+#             jacobian.mul_(grad_mask[:, None])
+#
+#         return jacobian.sum(dim)
+#
+#     @staticmethod
+#     @torch.no_grad()  # necessary?
+#     def compute_output(A, B, factor):
+#
+#         out = B * A.unsqueeze(1)
+#         out_pos = torch.clamp(out, min=0.0)
+#         out_neg = torch.clamp(out, max=0.0)
+#
+#         output = out.sum(0)
+#         output_pos = out_pos.sum(0)
+#         output_neg = out_neg.sum(0)
+#         max_abs = abs(out).max(0)[0]
+#
+#         gamma = max_abs / factor - output
+#         gamma = gamma / (
+#             (output > 0) * output_pos
+#             + (output < 0) * output_neg
+#             + (output == 0) * 1e-10
+#         )
+#
+#         return (
+#             output + (output > 0) * output_pos * gamma + (output < 0) * output_neg,
+#             gamma,
+#         )
+#
+#     @staticmethod
+#     @once_differentiable
+#     def backward(ctx, *grad_outputs):
+#
+#         # -- initialize variables
+#         A, B = ctx.saved_tensors[:2]
+#         A_shape, B_shape = A.shape, B.shape
+#         A_ref, B_ref = ctx.reference
+#
+#         if ctx.options["transpose"]:
+#             B = B.transpose(-2, -1)
+#             d_k = A.shape[-1]
+#
+#         # reshape head dimension into batch dimension for easier handling
+#         A = A.reshape(-1, *A.shape[2:])
+#         B = B.reshape(-1, *B.shape[2:])
+#         grad_outputs = grad_outputs[0].reshape(-1, *grad_outputs[0].shape[2:])
+#
+#         # -- compute output
+#         output, gamma = vmap(
+#             vmap(
+#                 IRefXGMultiplyAdaptiveGammaVMAPRule.compute_output,
+#                 in_dims=(0, None, None),
+#             ),
+#             in_dims=(0, 0, None),
+#             chunk_size=ctx.options["chunk_size"],
+#         )(A, B, ctx.options["factor"])
+#
+#         if ctx.options["transpose"]:
+#             output = output / math.sqrt(d_k)
+#
+#         # -- compute relevance
+#         grad_outputs.div_(stabilize(output))
+#
+#         relevance_A = vmap(
+#             vmap(IRefXGMultiplyVMAPRule.compute_relevance, in_dims=(None, 0, None, 0)),
+#             in_dims=(0, 0, None, 0),
+#             chunk_size=ctx.options["chunk_size"],
+#         )(B, A, A_ref, grad_outputs, modifier=modifier, dim=1)
+#
+#         relevance_B = vmap(
+#             vmap(
+#                 IRefXGMultiplyVMAPRule.compute_relevance,
+#                 in_dims=(None, 1, None, 1),
+#                 out_dims=1,
+#             ),
+#             in_dims=(0, 0, None, 0),
+#             chunk_size=ctx.options["chunk_size"],
+#         )(A, B, B_ref, grad_outputs, modifier=modifier, dim=0)
+#
+#         if ctx.options["transpose"]:
+#             relevance_B = relevance_B.transpose(-2, -1)
+#             relevance_B = relevance_B / math.sqrt(d_k)
+#             relevance_A = relevance_A / math.sqrt(d_k)
+#
+#         return (None, None, None) + (
+#             relevance_A.view(*A_shape),
+#             relevance_B.view(*B_shape),
+#         )
 
 
 class IRefXGJacobianGenericRuleVMAP(Function):
@@ -2504,7 +2504,7 @@ class SumZPlus(Function):
     @once_differentiable
     def backward(ctx, *grad_outputs):
 
-        pydevd.settrace(suspend=False, trace_only_current_thread=True)
+        #pydevd.settrace(suspend=False, trace_only_current_thread=True)
 
         inputs = ctx.saved_tensors
 
